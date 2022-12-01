@@ -1,0 +1,37 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.4.33103.184
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Firey", "Firey\Firey.csproj", "{EE35C3B6-B526-4460-BC29-0F8A233BEE9D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Firey.API", "Firey.API\Firey.API.csproj", "{AC528639-BBA0-4B5E-88F1-8CDC1E3B6D15}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Fiery.Tests", "Fiery.Tests\Fiery.Tests.csproj", "{041A1D96-F90C-47FE-9C69-732D9ED1EB40}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{EE35C3B6-B526-4460-BC29-0F8A233BEE9D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EE35C3B6-B526-4460-BC29-0F8A233BEE9D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EE35C3B6-B526-4460-BC29-0F8A233BEE9D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EE35C3B6-B526-4460-BC29-0F8A233BEE9D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AC528639-BBA0-4B5E-88F1-8CDC1E3B6D15}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AC528639-BBA0-4B5E-88F1-8CDC1E3B6D15}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AC528639-BBA0-4B5E-88F1-8CDC1E3B6D15}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AC528639-BBA0-4B5E-88F1-8CDC1E3B6D15}.Release|Any CPU.Build.0 = Release|Any CPU
+		{041A1D96-F90C-47FE-9C69-732D9ED1EB40}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{041A1D96-F90C-47FE-9C69-732D9ED1EB40}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{041A1D96-F90C-47FE-9C69-732D9ED1EB40}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{041A1D96-F90C-47FE-9C69-732D9ED1EB40}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {3569E52A-AC0A-466C-8A1A-772C872A800E}
+	EndGlobalSection
+EndGlobal
