@@ -15,6 +15,17 @@ namespace Firey
         float GetTemperature();
     }
 
+    public class FakeHeater : IHeater
+    {
+        public void Disable()
+        {
+        }
+
+        public void Enable()
+        {
+        }
+    }
+
     public class GpioHeater : IHeater
     {
 

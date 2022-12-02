@@ -51,7 +51,8 @@ export default class App extends Vue {
     reducedMeasurement = 0; // last sample index that has been reduced
     measurementDetailPeriod = 5 * 60; // five minutes worth of high-res data
 
-    host = "https://localhost:7135";
+    //host = "https://localhost:7135";
+    host = "http://kiln-1.local:5000"
 
     async startSchedule() {
         await fetch(`${this.host}/kiln/schedule/${this.scheduleToStart}`, {

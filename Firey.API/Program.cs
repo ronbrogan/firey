@@ -16,13 +16,18 @@ namespace Firey.API
             builder.Services.AddSwaggerGen();
             builder.Services.AddSignalR();
 
-            // TODO: replace modeled kiln with GPIO/tc impls
+#if DEBUG
             var modelKiln = new ModelKiln();
             builder.Services.AddSingleton<ModelKiln>(modelKiln);
             builder.Services.AddHostedService(f => f.GetRequiredService<ModelKiln>());
             builder.Services.AddSingleton<ITemperatureSensor>(f => f.GetRequiredService<ModelKiln>());
             builder.Services.AddSingleton<IHeater>(f => f.GetRequiredService<ModelKiln>());
 
+#else
+            builder.Services.AddSingleton<ITemperatureSensor, SpiThermocouple>();
+            builder.Services.AddSingleton<IHeater, FakeHeater>();
+
+#endif
             builder.Services.AddSingleton<ITimeSource, DefaultTimeSource>();
             
             builder.Services.AddSingleton<KilnControlService>();
