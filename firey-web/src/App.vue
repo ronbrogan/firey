@@ -30,6 +30,7 @@ export interface ScheduleRamp {
 export interface KilnSchedule {
     id: number;
     name: string;
+    defaultStartTemp: number;
     ramps: ScheduleRamp[];
 }
 
@@ -45,7 +46,10 @@ export default class App extends Vue {
     public kilnInfo: KilnInfo = <KilnInfo>{};
     public scheduleToStart: string | null = null;
     public schedule: KilnSchedule | null = null;
-    public measurements: any[] = [];
+    public measurements: Measurement[] = [];
+    
+    reducedMeasurement = 0; // last sample index that has been reduced
+    measurementDetailPeriod = 5 * 60; // five minutes worth of high-res data
 
     host = "https://localhost:7135";
 
@@ -68,10 +72,34 @@ export default class App extends Vue {
 
         this.connection.on("update", (info) => {
             this.kilnInfo = info;
+
+            
+            if(this.kilnInfo.secondsElapsed == null)
+                return;
+
             this.measurements.push({
                 x: this.kilnInfo.secondsElapsed,
                 y: this.kilnInfo.measuredTemp,
             });
+
+            var samplesThatShouldBeReduced = this.measurements.length - this.measurementDetailPeriod;
+            samplesThatShouldBeReduced -= this.reducedMeasurement;
+
+            if(samplesThatShouldBeReduced > 60) // reduce 1 minute worth of data
+            {
+                // clamp to 60
+                samplesThatShouldBeReduced = samplesThatShouldBeReduced > 60 ? 60 : samplesThatShouldBeReduced;
+
+                var samples = this.measurements.splice(this.reducedMeasurement+1, samplesThatShouldBeReduced);
+
+                var sample = samples.reduce((s,c) => s + c.y, 0) / samples.length;
+                this.measurements.splice(this.reducedMeasurement + 1, 0, {
+                    x: samples[0].x,
+                    y: sample
+                });
+
+                this.reducedMeasurement++;
+            }
         });
 
         this.connection.on("currentSchedule", (schedule) => {
@@ -103,6 +131,10 @@ export default class App extends Vue {
             setTimeout(this.start, 5000);
         }
     }
+
+    get progressTimeStamp() {
+        return new Date((this.kilnInfo.secondsElapsed ?? 0) * 1000).toISOString().substring(11, 19);
+    }
 }
 </script>
 
@@ -127,7 +159,7 @@ export default class App extends Vue {
             </div>
             <div class="meter">
                 <header>Progress</header>
-                {{ kilnInfo.secondsElapsed }}
+                {{ progressTimeStamp }}
             </div>
             <div class="meter" v-if="schedule == null">
                 <header>Start Schedule</header>

@@ -140,8 +140,9 @@ namespace Firey
             if (this.Status == KilnStatus.Ready)
                 return;
 
+            this.heater.Disable();
             this.Schedule = null;
-            this.Status = KilnStatus.Cooldown;
+            this.Status = KilnStatus.Ready;
             this.OnScheduleChange?.Invoke(this.Schedule);
         }
 
