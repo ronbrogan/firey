@@ -1,9 +1,10 @@
 using Microsoft.AspNetCore.Mvc;
+using System.Text.Json;
 
 namespace Firey.API.Controllers
 {
     [ApiController]
-    [Route("[controller]")]
+    [Route("api/[controller]")]
     public class KilnController : ControllerBase
     {
         private readonly KilnControlService kiln;
@@ -31,6 +32,8 @@ namespace Firey.API.Controllers
         public async Task<ActionResult> StartSchedule(int scheduleId)
         {
             var schedule = await GlazyApi.GetSchedule(scheduleId);
+
+            this._logger.LogWarning("Starting schedule: " + JsonSerializer.Serialize(schedule));
 
             if (this.kiln.TryStartSchedule(schedule))
                 return Ok();

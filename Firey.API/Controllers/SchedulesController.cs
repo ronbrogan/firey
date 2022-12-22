@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace Firey.API.Controllers
 {
     [ApiController]
-    [Route("[controller]")]
+    [Route("api/[controller]")]
     public class SchedulesController : ControllerBase
     {
         private readonly KilnControlService kiln;

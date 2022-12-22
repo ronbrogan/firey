@@ -1,4 +1,5 @@
 using Firey;
+using Firey.Data;
 using Moq;
 using System.Text.Json;
 
@@ -32,7 +33,7 @@ namespace Fiery.Tests
         {
             var kiln = new ModelKiln();
             var time = new SteppedTimeSource();
-            var controller = new KilnControlService(kiln, kiln, time);
+            var controller = new KilnControlService(kiln, kiln, time, Mock.Of<IKilnRunRepostory>());
 
             Assert.IsTrue(controller.TryStartSchedule(schedule));
 

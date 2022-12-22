@@ -93,10 +93,10 @@ namespace Firey
 
     public class User
     {
-        public Data data { get; set; }
+        public UserData data { get; set; }
     }
 
-    public class Data
+    public class UserData
     {
         public int id { get; set; }
         public string name { get; set; }

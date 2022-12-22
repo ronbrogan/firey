@@ -1,10 +1,4 @@
 <script lang="ts">
-// This starter template is using Vue 3 <script setup> SFCs
-// Check out https://vuejs.org/api/sfc-script-setup.html#script-setup
-import * as signalR from "@microsoft/signalr";
-import { Options, Vue } from "vue-class-component";
-import ScheduleGraph from "./components/ScheduleGraph.vue";
-
 export interface KilnInfo {
     measuredTemp: number;
     secondsElapsed: number | null;
@@ -34,109 +28,155 @@ export interface KilnSchedule {
     ramps: ScheduleRamp[];
 }
 
-@Options({
-    components: {
-        ScheduleGraph,
-    },
-})
-export default class App extends Vue {
-    connection: signalR.HubConnection | null = null;
+</script>
+<script setup lang="ts">
+import * as signalR from "@microsoft/signalr";
+import ScheduleChart from './components/ScheduleChart.vue';
+import { ref, computed, onMounted } from "vue";
 
-    public connected = false;
-    public kilnInfo: KilnInfo = <KilnInfo>{};
-    public scheduleToStart: string | null = null;
-    public schedule: KilnSchedule | null = null;
-    public measurements: Measurement[] = [];
-    
-    reducedMeasurement = 0; // last sample index that has been reduced
-    measurementDetailPeriod = 5 * 60; // five minutes worth of high-res data
+let connection: signalR.HubConnection | null = null;
 
-    //host = "https://localhost:7135";
-    host = "http://kiln-1.local:5000"
+const connected = ref(false);
+const kilnInfo = ref(<KilnInfo>{});
+const scheduleToStart = ref<string | null>(null);
+const schedule = ref<KilnSchedule | null>(null);
+const measurements = ref<Measurement[]>([]);
 
-    async startSchedule() {
-        await fetch(`${this.host}/kiln/schedule/${this.scheduleToStart}`, {
-            method: "POST",
-        });
-        this.scheduleToStart = null;
-    }
+let reducedMeasurement = 0; // last sample index that has been reduced
+let measurementDetailPeriod = 5 * 60; // five minutes worth of high-res data
 
-    async stopSchedule() {
-        await fetch(`${this.host}/kiln/stop`, { method: "POST" });
-    }
 
-    async created() {
-        this.connection = new signalR.HubConnectionBuilder()
-            .withUrl(`${this.host}/control`)
-            .configureLogging(signalR.LogLevel.Information)
-            .build();
+let host = `${window.location.protocol}//${window.location.hostname}`;
 
-        this.connection.on("update", (info) => {
-            this.kilnInfo = info;
+async function startSchedule() {
+    await fetch(`${host}/api/kiln/schedule/${scheduleToStart.value}`, {
+        method: "POST",
+    });
+    scheduleToStart.value = null;
+}
 
-            
-            if(this.kilnInfo.secondsElapsed == null)
-                return;
+async function stopSchedule() {
+    await fetch(`${host}/api/kiln/stop`, { method: "POST" });
+}
 
-            this.measurements.push({
-                x: this.kilnInfo.secondsElapsed,
-                y: this.kilnInfo.measuredTemp,
-            });
+let ready = false;
 
-            var samplesThatShouldBeReduced = this.measurements.length - this.measurementDetailPeriod;
-            samplesThatShouldBeReduced -= this.reducedMeasurement;
+onMounted(() => {
+    if(import.meta.env.VITE_backend_port)
+        host += ":" + import.meta.env.VITE_backend_port;
 
-            if(samplesThatShouldBeReduced > 60) // reduce 1 minute worth of data
-            {
-                // clamp to 60
-                samplesThatShouldBeReduced = samplesThatShouldBeReduced > 60 ? 60 : samplesThatShouldBeReduced;
+    connection = new signalR.HubConnectionBuilder()
+        .withUrl(`${host}/control`, { withCredentials: false })
+        .configureLogging(signalR.LogLevel.Information)
+        .build();
 
-                var samples = this.measurements.splice(this.reducedMeasurement+1, samplesThatShouldBeReduced);
+    connection.on("update", (info) => {
+        kilnInfo.value = info;
 
-                var sample = samples.reduce((s,c) => s + c.y, 0) / samples.length;
-                this.measurements.splice(this.reducedMeasurement + 1, 0, {
-                    x: samples[0].x,
-                    y: sample
-                });
-
-                this.reducedMeasurement++;
-            }
-        });
-
-        this.connection.on("currentSchedule", (schedule) => {
-            this.measurements = [];
-            this.schedule = schedule;
-            console.log("schedule received", schedule);
-        });
-
-        this.connection.onclose(async () => {
-            await this.start();
-        });
-
-        // Start the connection.
-        this.start();
-    }
-
-    async start() {
-        if (this.connection == null) {
-            setTimeout(this.start, 5000);
+        if(!ready){
+            console.log("not ready for graphing");
             return;
         }
 
-        try {
-            await this.connection.start();
-            console.log("SignalR Connected.");
-            this.connected = true;
-        } catch (err) {
-            console.log(err);
-            setTimeout(this.start, 5000);
+        if (kilnInfo.value.secondsElapsed) {
+            measurements.value.push({
+                x: kilnInfo.value.secondsElapsed ?? 0,
+                y: kilnInfo.value.measuredTemp,
+            });
         }
+
+        var samplesThatShouldBeReduced = measurements.value.length - measurementDetailPeriod;
+        samplesThatShouldBeReduced -= reducedMeasurement;
+
+        if (samplesThatShouldBeReduced > 60) // reduce 1 minute worth of data
+        {
+            // clamp to 60
+            samplesThatShouldBeReduced = samplesThatShouldBeReduced > 60 ? 60 : samplesThatShouldBeReduced;
+
+            var samples = measurements.value.splice(reducedMeasurement + 1, samplesThatShouldBeReduced);
+
+            var sample = samples.reduce((s, c) => s + c.y, 0) / samples.length;
+            measurements.value.splice(reducedMeasurement + 1, 0, {
+                x: samples[0].x,
+                y: sample
+            });
+
+            reducedMeasurement++;
+        }
+    });
+
+    connection.on("currentSchedule", (s) => {
+        if (s) {
+            measurements.value.splice(0, measurements.value.length);
+        }
+        
+        schedule.value = s;
+        console.log("schedule received", s);
+    });
+
+    connection.on("runHistory", (s :KilnInfo[]) => {
+        
+        let lastSample = 0;
+        let i = 0;
+        
+        let reduced = [] as Measurement[];
+
+        while(lastSample < s.length)
+        {
+            i++;
+
+            var first = s[lastSample];
+            var current = s[i];
+
+            if(!current)
+                break;
+
+            if((current.secondsElapsed! - first.secondsElapsed!) > 60)
+            {
+                let samplesToReduce = s.slice(lastSample, i);
+                let value = samplesToReduce.reduce((s, c) => s + c.measuredTemp, 0) / samplesToReduce.length;
+                reduced.push({x: first.secondsElapsed ?? 0, y: value});
+                lastSample = i;
+            }
+        }
+
+        measurements.value = reduced;
+        console.log(`backlog received, ${s.length} received -> reduced to ${reduced.length}`, reduced);
+        ready = true;
+    });
+
+    connection.onclose(async () => {
+        connected.value = false;
+        await start();
+    });
+
+    // Start the connection.
+    start();
+});
+
+
+
+async function start() {
+    if (connection == null) {
+        setTimeout(start, 2000);
+        return;
     }
 
-    get progressTimeStamp() {
-        return new Date((this.kilnInfo.secondsElapsed ?? 0) * 1000).toISOString().substring(11, 19);
+    try {
+        await connection.start();
+        console.log("SignalR Connected.");
+        connected.value = true;
+    } catch (err) {
+        console.log(err);
+        setTimeout(start, 2000);
     }
 }
+
+const progressTimeStamp = computed(
+    function progressTimeStamp() {
+        return new Date((kilnInfo.value.secondsElapsed ?? 0) * 1000).toISOString().substring(11, 19);
+    })
+
 </script>
 
 <template>
@@ -173,7 +213,7 @@ export default class App extends Vue {
             </div>
         </section>
         <div class="graph">
-            <ScheduleGraph :schedule="schedule" :measurements="measurements"></ScheduleGraph>
+            <ScheduleChart :schedule="schedule" :measurements="measurements"></ScheduleChart>
         </div>
     </div>
 </template>

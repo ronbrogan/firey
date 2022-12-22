@@ -32,6 +32,8 @@ namespace Firey.API
         Task Update(KilnInfo info);
 
         Task CurrentSchedule(KilnSchedule? schedule);
+
+        Task RunHistory(KilnInfo[] backlog);
     }
 
     public class ControlHub : Hub<IControlHub>
@@ -45,7 +47,9 @@ namespace Firey.API
 
         public override Task OnConnectedAsync()
         {
-            this.Clients.All.CurrentSchedule(kiln.Schedule);
+            this.Clients.Caller.CurrentSchedule(kiln.Schedule);
+
+            this.Clients.Caller.RunHistory(kiln.GetRunTimeseries());
 
             return base.OnConnectedAsync();
         }

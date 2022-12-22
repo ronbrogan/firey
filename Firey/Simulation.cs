@@ -1,5 +1,46 @@
-﻿namespace Firey
+﻿using Firey.Data;
+
+namespace Firey
 {
+    public class SimulationService : BackgroundService
+    {
+        private readonly SteppedTimeSource time;
+        private readonly ModelKiln kiln;
+        private readonly KilnControlService controller;
+
+        public SimulationService(SteppedTimeSource time, ModelKiln kiln, KilnControlService controller)
+        {
+            this.time = time;
+            this.kiln = kiln;
+            this.controller = controller;
+        }
+
+        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+        {
+            long lastEmit = 0;
+            DateTimeOffset lastTick = DateTimeOffset.MinValue;
+
+            await Task.Yield();
+
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                for(var i = 0; i < 10; i++)
+                {
+                    kiln.StepSeconds(0.1f);
+                    time.StepSeconds(0.1f);
+
+                    if ((time.Now - lastTick).TotalSeconds > time.HeatPeriod)
+                    {
+                        lastTick = time.Now;
+                        controller.Tick();
+                    }
+                }
+
+                await Task.Delay(1);
+            }
+        }
+    }
+
     public class SteppedTimeSource : ITimeSource
     {
         public float HeatPeriod => 0.2f;
@@ -34,7 +75,7 @@
             var time = new SteppedTimeSource();
             var kiln = new ModelKiln();
             
-            var controller = new KilnControlService(kiln, kiln,time);
+            var controller = new KilnControlService(kiln, kiln, time, new InMemoryKilnRunRepo());
 
             var ticks = new List<SimulationTick>(schedule.calculatedTimeMinutes * 60);
 
@@ -73,19 +114,19 @@
         }
     }
 
-    public class ModelKiln : BackgroundService, IHeater, ITemperatureSensor
+    public class ModelKiln : IHeater, ITemperatureSensor
     {
         private readonly float heatPerSecond;
         private readonly float heatLossConstant;
 
         private float elementEmission = 0;
-        private const int coldElementEmissionDelay = 30; // seconds
+        private const int coldElementEmissionDelay = 40; // seconds
 
 
         public bool IsHeating { get; private set; }
         public float Temperature { get; private set; }
 
-        public ModelKiln(float heatPerSecond = 1.5f, float heatLossConstant = 1500f)
+        public ModelKiln(float heatPerSecond = 2.6f, float heatLossConstant = 800f)
         {
             this.heatPerSecond = heatPerSecond;
             this.heatLossConstant = heatLossConstant;
@@ -109,23 +150,22 @@
         private bool wasHeating;
         public void StepSeconds(float seconds)
         {
-            const float elementCooldownFactor = 5;
-
-            float heatGain;
+            const float elementCooldownFactor = 2;
 
             if(wasHeating)
             {
                 elementEmission += seconds;
                 elementEmission = Math.Min(coldElementEmissionDelay, elementEmission);
 
-                heatGain = (elementEmission / coldElementEmissionDelay) * heatPerSecond * seconds;
+                
             }
             else
             {
                 elementEmission -= seconds * elementCooldownFactor;
                 elementEmission = Math.Max(0, elementEmission);
-                heatGain = 0;
             }
+
+            var heatGain = (elementEmission / coldElementEmissionDelay) * heatPerSecond * seconds;
 
             const float ambient = 72f;
 
@@ -135,21 +175,6 @@
 
             Temperature += heatGain - heatLoss;
             wasHeating = IsHeating;
-        }
-
-        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-        {
-            var last = DateTimeOffset.UtcNow;
-            while(!stoppingToken.IsCancellationRequested)
-            {
-                await Task.Delay(100);
-                var now = DateTimeOffset.UtcNow;
-                var delta = now - last;
-
-                this.StepSeconds((float)delta.TotalSeconds);
-
-                last = now;
-            }
         }
     }
 

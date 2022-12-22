@@ -1,4 +1,5 @@
-﻿using Iot.Device.Max31856;
+﻿using Firey.Data;
+using Iot.Device.Max31856;
 using System.Device.Gpio;
 using System.Device.Spi;
 using System.Runtime.CompilerServices;
@@ -27,10 +28,11 @@ namespace Firey
 
     public struct KilnInfo
     {
-        public float MeasuredTemp { get; set; }
+        public float MeasuredTemp { get; internal set; }
         public float? SecondsElapsed { get; internal set; }
         public float? ScheduleTarget { get; internal set; }
-        public bool Heating { get; set; }
+        public bool Heating { get; internal set; }
+        public KilnStatus Status { get; internal set; }
     }
 
     public enum KilnStatus
@@ -58,7 +60,7 @@ namespace Firey
     {
         private float cooldownEnd = 100f;
 
-        private float kp = 100f;
+        private float kp = 25f;
         private float ki = 800f;
         private float kd = 20;
 
@@ -78,10 +80,13 @@ namespace Firey
 
         public KilnStatus Status { get; private set; }
         public KilnSchedule? Schedule { get; private set; }
+        public KilnRun? StoredRun { get; private set; }
+
         private DateTimeOffset scheduleStartedAt;
         private readonly IHeater heater;
         private readonly ITemperatureSensor therm;
         private readonly ITimeSource time;
+        private readonly IKilnRunRepostory runRepo;
 
         public float SecondsIntoSchedule
         {
@@ -96,7 +101,7 @@ namespace Firey
         }
 
 
-        public KilnControlService(IHeater heater, ITemperatureSensor therm, ITimeSource time)
+        public KilnControlService(IHeater heater, ITemperatureSensor therm, ITimeSource time, IKilnRunRepostory runRepo)
         {
             this.pid = new PidController(kp, ki, kd);
             this.Status = KilnStatus.Ready;
@@ -104,6 +109,7 @@ namespace Firey
             this.heater = heater;
             this.therm = therm;
             this.time = time;
+            this.runRepo = runRepo;
         }
 
         /// <summary>
@@ -125,8 +131,13 @@ namespace Firey
             schedule.ramps = schedule.ramps.OrderBy(r => r.order).ToArray();
 
             this.Schedule = schedule;
+            this.scheduleStartedAt = time.Now;
+            this.StoredRun = KilnRun.ForCommencingSchedule(schedule);
+            this.runRepo.SaveRun(this.StoredRun);
+
             this.Status = KilnStatus.Starting;
-            this.lastTime = time.Now;
+            this.lastUpdate = time.Now;
+            this.lastSave = time.Now;
 
             this.OnScheduleChange?.Invoke(this.Schedule);
 
@@ -140,10 +151,37 @@ namespace Firey
             if (this.Status == KilnStatus.Ready)
                 return;
 
+            this.info.Heating = false;
             this.heater.Disable();
             this.Schedule = null;
+            this.StoredRun = null;
             this.Status = KilnStatus.Ready;
             this.OnScheduleChange?.Invoke(this.Schedule);
+        }
+
+        public KilnInfo[] GetRunTimeseries()
+        {
+            if (this.StoredRun == null)
+                return Array.Empty<KilnInfo>();
+
+            var lastSec = 0;
+            return this.StoredRun.Timeseries.Where(e => 
+            {
+                if(e.TimeIntoSchedule > lastSec)
+                {
+                    lastSec++;
+                    return true;
+                }
+
+                return false;
+            }).Select(e => new KilnInfo 
+            { 
+                Heating = e.HeatEnabled,
+                MeasuredTemp = e.MeasuredTemperature,
+                ScheduleTarget = e.SetpointTemperature,
+                SecondsElapsed = e.TimeIntoSchedule,
+                Status = KilnStatus.Running
+            }).ToArray();
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -156,26 +194,39 @@ namespace Firey
             }
         }
 
-        private DateTimeOffset lastTime;
+        private DateTimeOffset lastSave;
+        private DateTimeOffset lastUpdate;
         public void Tick()
         {
+            this.info.Status = this.Status;
             this.info.MeasuredTemp = this.therm.GetTemperature();
             this.info.SecondsElapsed = SecondsIntoSchedule;
             this.info.ScheduleTarget = this.GetScheduleTarget((this.info.SecondsElapsed / 60f) ?? -1);
+            var currentTime = time.Now;
 
             if (IsRunnable())
             {
-                var currentTime = time.Now;
-                var deltaT = (currentTime - lastTime).TotalMilliseconds / 1000f;
+                var deltaT = (currentTime - lastUpdate).TotalMilliseconds / 1000f;
 
                 if (deltaT > time.UpdatePeriod)
                 {
-                    lastTime = currentTime;
+                    lastUpdate = currentTime;
                     this.Update((float)deltaT);
                 }
 
                 // toggle heating depending on current output level
                 this.EvaluateOutput();
+            }
+
+            if (this.StoredRun != null && this.Schedule != null)
+            {
+                this.StoredRun.AddSample(this.info);
+                // Save run every minute
+                if ((currentTime - lastSave).TotalMinutes > 1)
+                {
+                    this.runRepo.SaveRun(this.StoredRun);
+                    this.lastSave = time.Now;
+                }
             }
 
             this.OnUpdate?.Invoke(this.info);
@@ -229,13 +280,13 @@ namespace Firey
                 case KilnStatus.Ready:
                     return false;
                 case KilnStatus.Starting:
-                    this.scheduleStartedAt = time.Now;
                     this.Status = KilnStatus.Running;
                     return true;
                 case KilnStatus.Running:
                     if (this.info.ScheduleTarget == null)
                     {
                         this.Status = KilnStatus.Cooldown;
+                        this.info.Heating = false;
                         this.heater.Disable();
                         return false;
                     }

@@ -3,12 +3,12 @@ import { LineChart } from "vue-chart-3";
 import { KilnSchedule, Measurement } from "../App.vue";
 import { ref, watch, computed } from "vue";
 
-export interface Props {
+export interface ScheduleChart {
     measurements: Measurement[];
     schedule: KilnSchedule | null;
 }
 
-const props = withDefaults(defineProps<Props>(), {
+const props = withDefaults(defineProps<ScheduleChart>(), {
     measurements: () => [],
     schedule: () => <KilnSchedule>{}
 });
@@ -71,7 +71,7 @@ function buildScheduleData() {
     let scheduleData: Measurement[] = [];
 
     if (props.schedule?.ramps) {
-        let ramps = props.schedule.ramps.sort(r => r.order);
+        let ramps = props.schedule.ramps;
         var currentTime = 0;
         var currentTemp = props.schedule.defaultStartTemp;
 
@@ -79,13 +79,12 @@ function buildScheduleData() {
         for (let ramp of ramps) {
 
             currentTime += ramp.calculatedTimeMinutes;
-            currentTemp = ramp.targetTemp;
 
-            scheduleData.push({ x: currentTime * 60, y: currentTemp });
+            scheduleData.push({ x: currentTime * 60, y: ramp.targetTemp });
 
             if (ramp.holdMinutes > 0) {
                 currentTime += ramp.holdMinutes;
-                scheduleData.push({ x: currentTime * 60, y: currentTemp });
+                scheduleData.push({ x: currentTime * 60, y: ramp.targetTemp });
             }
         }
     }
@@ -98,19 +97,19 @@ const chartDatas = computed(chartDataGetter);
 function chartDataGetter() {
     return {
         datasets: [
+        {
+                label: "Measurements",
+                data: props.measurements,
+                fill: false,
+                borderColor: "rgba(255, 255, 255, 0.5)",
+                borderWidth: 2,
+                tension: 0.0,
+            },
             {
                 label: "Schedule",
                 data: scheduleData.value,
                 fill: false,
                 borderColor: "rgb(255, 0, 0)",
-                borderWidth: 2,
-                tension: 0.0,
-            },
-            {
-                label: "Measurements",
-                data: props.measurements,
-                fill: false,
-                borderColor: "rgb(255, 255, 255)",
                 borderWidth: 2,
                 tension: 0.0,
             },
@@ -120,5 +119,5 @@ function chartDataGetter() {
 </script>
 
 <template>
-    <LineChart v-if="(scheduleData.length > 0)" :chartData="chartDatas" :options="chartConfig" style="height: 100%"></LineChart>
+    <LineChart :chartData="chartDatas" :options="chartConfig" style="height: 100%"></LineChart>
 </template>
